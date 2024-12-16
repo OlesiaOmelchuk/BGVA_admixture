@@ -1,0 +1,67 @@
+---
+title: "project"
+format: html
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+# Load data
+fam <- read.table("Pundamilia.RAD_filtered2.fam", header = FALSE)
+qmatrix <- read.table("Pundamilia.RAD_filtered2.2.Q", header = FALSE)
+
+# Combine data
+data <- cbind(fam, qmatrix)
+
+# Set column names
+num_clusters <- ncol(qmatrix)  # Number of clusters (e.g., 2 for K=2)
+colnames(data) <- c("FID", "IID", "PID", "MID", "Sex", "Phenotype", paste0("Cluster", 1:num_clusters))
+
+# View data
+head(data)
+```
+
+
+```{r}
+# Install required packages (if not already installed)
+if (!require("reshape2")) install.packages("reshape2")
+if (!require("ggplot2")) install.packages("ggplot2")
+
+# Load libraries
+library(reshape2)
+library(ggplot2)
+
+# Reshape data
+data_long <- melt(data, id.vars = c("FID", "IID"), measure.vars = paste0("Cluster", 1:num_clusters))
+
+# View reshaped data
+head(data_long)
+```
+
+```{r}
+# Subset data for Cluster 1
+cluster1_data <- data_long[data_long$variable == "Cluster1", ]
+
+# Sort data by the proportion of Cluster 1 (descending order)
+cluster1_sorted <- cluster1_data[order(cluster1_data$value, decreasing = TRUE), ]
+
+# Use the sorted 'IID' order for the entire dataset
+data_long_sorted <- data_long
+data_long_sorted$IID <- factor(data_long_sorted$IID, levels = cluster1_sorted$IID)
+
+# Create the bar plot with sorted individuals
+ggplot(data_long_sorted, aes(x = IID, y = value, fill = variable)) +
+  geom_bar(stat = "identity", width = 1) +
+  labs(x = "Individuals", y = "Ancestry Proportion", fill = "Cluster") +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
+  theme_minimal() +
+  ggtitle("ADMIXTURE Plot with Cluster 1 Sorted by Proportion")
+
+```
