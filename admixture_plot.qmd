@@ -15,7 +15,7 @@ When you click the **Render** button a document will be generated that includes 
 ```{r}
 # Load data
 fam <- read.table("Pundamilia.RAD_filtered2.fam", header = FALSE)
-qmatrix <- read.table("Pundamilia.RAD_filtered2.2.Q", header = FALSE)
+qmatrix <- read.table("Pundamilia.RAD_filtered2.5.Q", header = FALSE)
 
 # Combine data
 data <- cbind(fam, qmatrix)
@@ -27,7 +27,6 @@ colnames(data) <- c("FID", "IID", "PID", "MID", "Sex", "Phenotype", paste0("Clus
 # View data
 head(data)
 ```
-
 
 ```{r}
 # Install required packages (if not already installed)
@@ -62,6 +61,119 @@ ggplot(data_long_sorted, aes(x = IID, y = value, fill = variable)) +
   labs(x = "Individuals", y = "Ancestry Proportion", fill = "Cluster") +
   theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
   theme_minimal() +
-  ggtitle("ADMIXTURE Plot with Cluster 1 Sorted by Proportion")
+  ggtitle("ADMIXTURE Plot k=3")
 
 ```
+```{r}
+# Subset data for Cluster 1 and Cluster 2
+cluster1_data <- data_long[data_long$variable == "Cluster1", ]
+cluster2_data <- data_long[data_long$variable == "Cluster2", ]
+
+# Merge Cluster 1 and Cluster 2 values into a single dataframe
+cluster_combined <- merge(
+  cluster1_data[, c("IID", "value")],
+  cluster2_data[, c("IID", "value")],
+  by = "IID",
+  suffixes = c("_Cluster1", "_Cluster2")
+)
+
+# Sort first by Cluster 1 (descending) and then by Cluster 2 (descending)
+cluster_combined_sorted <- cluster_combined[order(-cluster_combined$value_Cluster1, -cluster_combined$value_Cluster2), ]
+
+# Use the sorted 'IID' order for the entire dataset
+data_long_sorted <- data_long
+data_long_sorted$IID <- factor(data_long_sorted$IID, levels = cluster_combined_sorted$IID)
+
+# Create the bar plot with sorted individuals
+ggplot(data_long_sorted, aes(x = IID, y = value, fill = variable)) +
+  geom_bar(stat = "identity", width = 1) +
+  labs(x = "Individuals", y = "Ancestry Proportion", fill = "Cluster") +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
+  theme_minimal() +
+  ggtitle("ADMIXTURE Plot Sorted by Cluster 1 and Cluster 2")
+```
+```{r}
+# Subset data for all 3 clusters
+cluster1_data <- data_long[data_long$variable == "Cluster1", ]
+cluster2_data <- data_long[data_long$variable == "Cluster2", ]
+cluster3_data <- data_long[data_long$variable == "Cluster3", ]
+
+# Merge Cluster values into a single dataframe
+cluster_combined <- Reduce(function(x, y) merge(x, y, by = "IID"),
+                           list(
+                             cluster1_data[, c("IID", "value")],
+                             cluster2_data[, c("IID", "value")],
+                             cluster3_data[, c("IID", "value")]
+                           ))
+
+# Rename columns for clarity
+colnames(cluster_combined) <- c("IID", "Cluster1", "Cluster2", "Cluster3")
+
+# Sort primarily by Cluster 1, then Cluster 2, and then Cluster 3 (all descending)
+cluster_combined_sorted <- cluster_combined[order(
+  -cluster_combined$Cluster1,
+  -cluster_combined$Cluster2,
+  -cluster_combined$Cluster3
+), ]
+
+# Use the sorted 'IID' order for the entire dataset
+data_long_sorted <- data_long
+data_long_sorted$IID <- factor(data_long_sorted$IID, levels = cluster_combined_sorted$IID)
+
+# Create the bar plot with sorted individuals
+ggplot(data_long_sorted, aes(x = IID, y = value, fill = variable)) +
+  geom_bar(stat = "identity", width = 1) +
+  labs(x = "Individuals", y = "Ancestry Proportion", fill = "Cluster") +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
+  theme_minimal() +
+  ggtitle("ADMIXTURE Plot Sorted by Clusters 1 to 3")
+
+```
+
+
+```{r}
+# Subset data for all 4 clusters
+cluster1_data <- data_long[data_long$variable == "Cluster1", ]
+cluster2_data <- data_long[data_long$variable == "Cluster2", ]
+cluster3_data <- data_long[data_long$variable == "Cluster3", ]
+cluster4_data <- data_long[data_long$variable == "Cluster4", ]
+
+# Merge Cluster values into a single dataframe
+cluster_combined <- Reduce(function(x, y) merge(x, y, by = "IID"),
+                           list(
+                             cluster1_data[, c("IID", "value")],
+                             cluster2_data[, c("IID", "value")],
+                             cluster3_data[, c("IID", "value")],
+                             cluster4_data[, c("IID", "value")]
+                           ))
+
+# Rename columns for clarity
+colnames(cluster_combined) <- c("IID", "Cluster1", "Cluster2", "Cluster3", "Cluster4")
+
+# Sort primarily by Cluster 1, then Cluster 2, Cluster 3, and Cluster 4 (all descending)
+cluster_combined_sorted <- cluster_combined[order(
+  -cluster_combined$Cluster1,
+  -cluster_combined$Cluster2,
+  -cluster_combined$Cluster3,
+  -cluster_combined$Cluster4
+), ]
+
+# Use the sorted 'IID' order for the entire dataset
+data_long_sorted <- data_long
+data_long_sorted$IID <- factor(data_long_sorted$IID, levels = cluster_combined_sorted$IID)
+
+# Create the bar plot with sorted individuals
+ggplot(data_long_sorted, aes(x = IID, y = value, fill = variable)) +
+  geom_bar(stat = "identity", width = 1) +
+  labs(x = "Individuals", y = "Ancestry Proportion", fill = "Cluster") +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
+  theme_minimal() +
+  ggtitle("ADMIXTURE Plot Sorted by Clusters 1 to 4")
+
+```
+
+
+
+
+
+
