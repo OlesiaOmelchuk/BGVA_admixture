@@ -1,21 +1,14 @@
 ---
-title: "project"
+title: "Admixture analysis"
 format: html
 editor: visual
 ---
 
-## Quarto
-
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
-
-## Running Code
-
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
-
+# Load data
 ```{r}
 # Load data
-fam <- read.table("Pundamilia.RAD_filtered2.fam", header = FALSE)
-qmatrix <- read.table("Pundamilia.RAD_filtered2.5.Q", header = FALSE)
+fam <- read.table("Dragen/chr22/chr22_sample_100_filtered2.fam", header = FALSE)
+qmatrix <- read.table("Dragen/chr22/chr22_sample_100_filtered2.3.Q", header = FALSE)
 
 # Combine data
 data <- cbind(fam, qmatrix)
@@ -43,6 +36,17 @@ data_long <- melt(data, id.vars = c("FID", "IID"), measure.vars = paste0("Cluste
 # View reshaped data
 head(data_long)
 ```
+# Experiment with k and different approaches for sorting
+```{r}
+# Create the bar plot with sorted individuals
+ggplot(data_long, aes(x = IID, y = value, fill = variable)) +
+  geom_bar(stat = "identity", width = 1) +
+  labs(x = "Individuals", y = "Ancestry Proportion", fill = "Cluster") +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
+  theme_minimal() +
+  ggtitle("ADMIXTURE Plot k=2")
+
+```
 
 ```{r}
 # Subset data for Cluster 1
@@ -64,10 +68,11 @@ ggplot(data_long_sorted, aes(x = IID, y = value, fill = variable)) +
   ggtitle("ADMIXTURE Plot k=3")
 
 ```
+
 ```{r}
 # Subset data for Cluster 1 and Cluster 2
-cluster1_data <- data_long[data_long$variable == "Cluster1", ]
-cluster2_data <- data_long[data_long$variable == "Cluster2", ]
+cluster1_data <- data_long[data_long$variable == "Cluster2", ]
+cluster2_data <- data_long[data_long$variable == "Cluster3", ]
 
 # Merge Cluster 1 and Cluster 2 values into a single dataframe
 cluster_combined <- merge(
@@ -92,6 +97,7 @@ ggplot(data_long_sorted, aes(x = IID, y = value, fill = variable)) +
   theme_minimal() +
   ggtitle("ADMIXTURE Plot Sorted by Cluster 1 and Cluster 2")
 ```
+
 ```{r}
 # Subset data for all 3 clusters
 cluster1_data <- data_long[data_long$variable == "Cluster1", ]
@@ -129,7 +135,6 @@ ggplot(data_long_sorted, aes(x = IID, y = value, fill = variable)) +
   ggtitle("ADMIXTURE Plot Sorted by Clusters 1 to 3")
 
 ```
-
 
 ```{r}
 # Subset data for all 4 clusters
@@ -172,8 +177,183 @@ ggplot(data_long_sorted, aes(x = IID, y = value, fill = variable)) +
 
 ```
 
+# Functions for admixture plots
+```{r}
+generate_admixture_plot <- function(k, fam_path, q_path, output_path) {
+  file.exists(fam_path)
+  file.exists(q_path)
+  
+  # Load the .fam and .Q files
+  fam <- read.table(fam_path, header = FALSE)
+  qmatrix <- read.table(q_path, header = FALSE)
+  
+  # Combine the data
+  data <- cbind(fam, qmatrix)
+  
+  # Set column names
+  colnames(data) <- c("FID", "IID", "PID", "MID", "Sex", "Phenotype", paste0("Cluster", 1:k))
+  
+  # Reshape data into long format for ggplot
+  data_long <- melt(data, id.vars = c("FID", "IID"), measure.vars = paste0("Cluster", 1:k))
 
+  # Create the bar plot
+  plot <- ggplot(data_long, aes(x = IID, y = value, fill = variable)) +
+    geom_bar(stat = "identity", width = 1) +
+    labs(x = "Individuals", y = "Ancestry Proportion", fill = "Cluster") +
+    theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
+    theme_minimal() +
+    ggtitle(paste("ADMIXTURE Plot k =", k))
+  
+  # Save the plot to file
+  ggsave(output_path, plot, width = 10, height = 6, dpi = 300)
+  message("ADMIXTURE plot saved to ", output_path)
+}
+```
 
+```{r}
+generate_admixture_plot_sorted <- function(k, fam_path, q_path, output_path) {
+  # Load data
+  fam <- read.table(fam_path, header = FALSE)
+  qmatrix <- read.table(q_path, header = FALSE)
+  
+  # Combine data
+  data <- cbind(fam, qmatrix)
+  
+  # Set column names
+  num_clusters <- ncol(qmatrix)  # Number of clusters (e.g., 2 for K=2)
+  colnames(data) <- c("FID", "IID", "PID", "MID", "Sex", "Phenotype", paste0("Cluster", 1:num_clusters))
+  
+  # Reshape data
+  data_long <- melt(data, id.vars = c("FID", "IID"), measure.vars = paste0("Cluster", 1:num_clusters))
+  
+  # Sort individuals by their cluster proportions
+  cluster_order <- data[, paste0("Cluster", 1:num_clusters)]  # Select the cluster columns
+  order_indices <- do.call(order, c(as.data.frame(cluster_order), decreasing = TRUE))  # Order based on all clusters
+  
+  # Reorder IID according to the cluster proportions
+  data_long$IID <- factor(data_long$IID, levels = data$IID[order_indices])
+  
+  # Define a stable color palette (using RColorBrewer or a custom palette)
+  library(RColorBrewer)
+  color_palette <- brewer.pal(max(k, 5), "Set3")  # Ensure at least 5 colors
+  
+  # Map the colors to the clusters, repeating colors for smaller k
+  data_long$ClusterColor <- factor(data_long$variable, levels = paste0("Cluster", 1:num_clusters))
+  
+  # Create the bar plot with stable colors
+  p <- ggplot(data_long, aes(x = IID, y = value, fill = ClusterColor)) +
+    geom_bar(stat = "identity", width = 1) +
+    scale_fill_manual(values = color_palette[1:num_clusters], labels = paste0("Cluster ", 1:num_clusters)) +  # Add cluster names to labels
+    labs(x = "Individuals", y = "Ancestry Proportion", fill = "Cluster") +
+    theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
+    theme_minimal() +
+    ggtitle(paste("ADMIXTURE Plot k =", k))
+  
+  # Save the plot
+  ggsave(output_path, plot = p)  # Ensure plot is passed to ggsave outside ggplot pipeline
+}
+```
 
+```{r}
+generate_admixture_plots <- function(base_path, k_min = 2, k_max = 5) {
+  
+  # Function to generate the ADMIXTURE plot
+  generate_admixture_plot <- function(k, fam_path, q_path, output_path, iid_order) {
+    
+    # Load data
+    fam <- read.table(fam_path, header = FALSE)
+    qmatrix <- read.table(q_path, header = FALSE)
+    
+    # Combine data
+    data <- cbind(fam, qmatrix)
+    
+    # Set column names
+    num_clusters <- ncol(qmatrix)  # Number of clusters for the current k
+    colnames(data) <- c("FID", "IID", "PID", "MID", "Sex", "Phenotype", paste0("Cluster", 1:num_clusters))
+    
+    # Reshape data
+    data_long <- melt(data, id.vars = c("FID", "IID"), measure.vars = paste0("Cluster", 1:num_clusters))
+    
+    # Apply the saved IID order for sorting (ensuring consistency across different k values)
+    data_long$IID <- factor(data_long$IID, levels = iid_order)
+    
+    # Define a stable color palette (using RColorBrewer or a custom palette)
+    library(RColorBrewer)
+    color_palette <- brewer.pal(max(k, 5), "Set3")  # Ensure at least 5 colors
+    
+    # Map the colors to the clusters, repeating colors for smaller k
+    data_long$ClusterColor <- factor(data_long$variable, levels = paste0("Cluster", 1:num_clusters))
+    
+    # Create the bar plot with stable colors
+    p <- ggplot(data_long, aes(x = IID, y = value, fill = ClusterColor)) +
+      geom_bar(stat = "identity", width = 1) +
+      scale_fill_manual(values = color_palette[1:num_clusters], labels = paste0("Cluster ", 1:num_clusters)) +  # Add cluster names to labels
+      labs(x = "Individuals", y = "Ancestry Proportion", fill = "Cluster") +
+      theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
+      theme_minimal() +
+      ggtitle(paste("ADMIXTURE Plot k =", k))
+    
+    # Save the plot
+    ggsave(output_path, plot = p)  # Ensure plot is passed to ggsave outside ggplot pipeline
+  }
+  
+  # Load data for k = 2 to determine the sorting order of individuals
+  k = 2
+  fam_path <- paste0(base_path, ".fam")  # .fam file path
+  q_path <- paste0(base_path, ".", k, ".Q")  # .Q file path for k = 2
+  
+  # Load the data for k = 2
+  fam <- read.table(fam_path, header = FALSE)
+  qmatrix <- read.table(q_path, header = FALSE)
+  
+  # Combine data and set column names
+  data <- cbind(fam, qmatrix)
+  num_clusters <- ncol(qmatrix)  # Number of clusters for k = 2
+  colnames(data) <- c("FID", "IID", "PID", "MID", "Sex", "Phenotype", paste0("Cluster", 1:num_clusters))
+  
+  # Reshape data
+  data_long <- melt(data, id.vars = c("FID", "IID"), measure.vars = paste0("Cluster", 1:num_clusters))
+  
+  # Sort individuals by their cluster proportions for k = 2
+  cluster_order <- data[, paste0("Cluster", 1:num_clusters)]  # Select the cluster columns
+  order_indices <- do.call(order, c(as.data.frame(cluster_order), decreasing = TRUE))  # Order based on all clusters
+  iid_order <- data$IID[order_indices]  # Save the order of IIDs
+  
+  # Loop over k from k_min to k_max and use the saved IID order
+  for (k in k_min:k_max) {
+    # Construct dynamic file paths for the current k
+    q_path <- paste0(base_path, ".", k, ".Q")  # .Q file path for current k
+    output_dir <- dirname(base_path)
+    output_path <- file.path(output_dir, paste0("admixture_plot_k", k, ".png"))  # Save in the same dir
+    
+    # Generate the plot for the current k
+    generate_admixture_plot(k, fam_path, q_path, output_path, iid_order)
+  }
+}
+```
 
+```{r}
+# Loop over k from 2 to 5
+for (k in 2:5) {
+  # Construct dynamic file paths
+  base_path <- "UAgenomes/chr17/chr17_filtered2"  # Base path for files
+  fam_path <- paste0(base_path, ".fam")                  # .fam file path
+  q_path <- paste0(base_path, ".", k, ".Q")              # .Q file path with dynamic k
 
+  # Extract the directory path to save the plot in the same directory
+  output_dir <- dirname(base_path)
+  output_path <- file.path(output_dir, paste0("admixture_plot_sorted_k", k, ".png"))  # Save in same dir
+
+  # Generate the plot
+  generate_admixture_plot_sorted(k, fam_path, q_path, output_path)
+}
+```
+
+```{r}
+# Example usage
+base_path <- "Dragen/chr22/chr22_sample_100_filtered2" 
+base_path <- "UAgenomes/chr20/Pundamilia.RAD_filtered2"  # Base path for files
+base_path <- "UAgenomes/chr22/chr22_filtered2"
+base_path <- "UAgenomes/chr17/chr17_filtered2"
+generate_admixture_plots(base_path, k_min = 2, k_max = 5)
+```
